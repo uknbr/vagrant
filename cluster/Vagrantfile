@@ -1,0 +1,65 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby 
+
+# Configuration
+VAGRANTFILE_API_VERSION = "2"
+BOX_IMAGE = "bento/ubuntu-14.04"
+BOX_MEMORY = 512
+NODE_COUNT = 3
+
+Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
+
+	# Check plugins
+	unless Vagrant.has_plugin?("vagrant-proxyconf")
+		puts "==> cluster: Installing vagrant-proxyconf plugin"
+		system('vagrant plugin install vagrant-proxyconf')
+	end
+
+	unless Vagrant.has_plugin?("vagrant-hosts")
+		puts "==> cluster: Installing vagrant-hosts plugin"
+		system('vagrant plugin install vagrant-hosts')
+	end
+
+	# Cluster
+	(1..NODE_COUNT).each do |i|
+		config.vm.define "node#{i}" do |subconfig|
+			subconfig.vm.box = BOX_IMAGE
+			subconfig.vm.hostname = "node#{i}"
+			subconfig.vm.network :private_network, ip: "10.0.0.#{i + 10}"
+
+			# Proxy
+			if Vagrant.has_plugin?("vagrant-proxyconf")
+				puts "==> Node: Checking Proxy Configuration from host"
+				if ENV["http_proxy"]
+				  puts "==> node#{i}: proxy = ON"
+				  subconfig.proxy.http = ENV["http_proxy"]
+				else
+				  puts "==> node#{i}: proxy = OFF"
+				end
+				if ENV["https_proxy"]
+				  subconfig.proxy.https = ENV["https_proxy"]
+				end
+				if ENV["no_proxy"]
+				  subconfig.proxy.no_proxy = ENV["no_proxy"]
+				end
+			end	
+			
+			# Sync hosts
+			if Vagrant.has_plugin?("vagrant-hosts")
+				subconfig.vm.provision :hosts, :sync_hosts => true
+			end
+
+			subconfig.vm.provider "virtualbox" do |vbox|
+				vbox.name = "node#{i}"
+				vbox.memory = BOX_MEMORY
+				vbox.cpus = 1
+				vbox.customize ["modifyvm", :id, "--natdnshostresolver1", "on"]
+				vbox.customize ["modifyvm", :id, "--ioapic", "on"]
+				vbox.customize ["modifyvm", :id, "--name", "node#{i}"]
+			end
+		end
+    end
+
+    # Script
+    config.vm.provision :shell, path: "bootstrap.sh"
+end

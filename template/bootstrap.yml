@@ -1,0 +1,12 @@
+---
+# Pedro Pavan
+
+- hosts: all
+  tasks:
+
+  - name: Set hostname 
+    hostname:
+      name: %name%
+
+  - name: Current IP
+    debug: var=ansible_all_ipv4_addresses

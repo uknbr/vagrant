@@ -1,0 +1,86 @@
+#
+# LICENSE MIT
+#
+# Copyright (c) 2018-2019 Amdocs and/or its affiliates. All rights reserved.
+# 
+# Since: July, 2018
+# Author: pedroa@amdocs.com
+# Description: Create mycenter Vagrant virtual machine.
+# 
+# DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
+# 
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+VAGRANTFILE_API_VERSION = "2"
+
+Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
+  config.vm.box = "bento/centos-7.6"
+  config.vm.box_download_insecure=true
+  #config.disksize.size = '90GB'
+
+  # Proxy
+  unless Vagrant.has_plugin?("vagrant-proxyconf")
+    puts "==> %name%: Installing vagrant-proxyconf plugin"
+    system('vagrant plugin install vagrant-proxyconf')
+  end
+
+  if Vagrant.has_plugin?("vagrant-proxyconf")
+    puts "==> %name%: Checking Proxy Configuration from host"
+    if ENV["http_proxy"]
+      puts "==> %name%: proxy = ON"
+      config.proxy.http = ENV["http_proxy"]
+    else
+      puts "==> %name%: proxy = OFF"
+    end
+    if ENV["https_proxy"]
+      config.proxy.https = ENV["https_proxy"]
+    end
+    if ENV["no_proxy"]
+      config.proxy.no_proxy = ENV["no_proxy"]
+    end
+  end
+
+  # VM settings
+  config.vm.provider "virtualbox" do |vbox|
+    vbox.name = "%name%"
+    vbox.memory = 1024
+    vbox.cpus = 1
+    vbox.customize ["modifyvm", :id, "--natdnshostresolver1", "on"]
+    vbox.customize ["modifyvm", :id, "--ioapic", "on"]
+    vbox.customize ["modifyvm", :id, "--name", "%name%"]
+  end
+
+  # Share
+  config.vm.synced_folder '.', '/vagrant', SharedFoldersEnableSymlinksCreate: false
+
+  # Network | NAT - Forward ports
+  config.vm.network :forwarded_port, guest: 9090, host: 9090
+  
+  # Network | Bridge - DHCP
+  #config.vm.network "public_network", bridge: "wlp18s0", use_dhcp_assigned_default_route: true
+
+  # VM name
+  config.vm.define :%name% do |%name%|
+  end
+  config.vm.hostname = "%name%"
+
+  # Run Ansible - Locally
+  config.vm.provision "ansible_local" do |ansible|
+    ansible.playbook = "bootstrap.yml"
+    ansible.install  = true
+    ansible.compatibility_mode = "2.0"
+    ansible.become   = true
+    ansible.become_user = "root"
+  end
+
+  # Run Ansible - Remotely
+  #config.vm.provision "ansible" do |ansible|
+  #  ansible.playbook = "bootstrap.yml"
+  #  ansible.sudo = true
+  #end
+
+  # Run script
+  config.vm.provision :shell, path: "bootstrap.sh"
+
+end
